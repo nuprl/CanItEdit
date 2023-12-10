@@ -1,0 +1,4 @@
+pandas==2.0.2
+torch==2.1.0
+z3-solver==4.12.2.0
+coverage==7.3.2

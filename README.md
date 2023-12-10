@@ -19,6 +19,7 @@ The CanItEdit benchmark dataset, EditCoder model, and EditPackFT dataset can be 
 - `./benchmark` contains the CanItEdit benchmark dataset and code for generating and evaluating completions
 - `./editcoder` contains code to train an EditCoder model
 - `./editpackft` contains code to reproduce the EditPackFT dataset
+- `./requirements.txt` contains the requirements for running the code of this repository
 
 
 # TODOs
