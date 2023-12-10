@@ -18,4 +18,5 @@ Another assumption is that your GPU supports bf16 training. If it does not, you 
 `--fp16` argument from the `./run.sh` script and the deepspeed config.
 
 The `finetuning-harness` submodule needs to be initialized and updated to run the training script,
-this can be done with `git submodule update --init`.
+this can be done with `git submodule update --init`. You should also install the requirements
+with `pip install -r ./finetuning-harness/requirements.txt`.
