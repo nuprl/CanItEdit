@@ -24,9 +24,5 @@ The CanItEdit benchmark dataset, EditCoder model, and EditPackFT dataset can be 
 
 # TODOs
 
-fix docker
-add multiple
-add training code for EditCoder
-add requirements.txt
 add script for editeval
 write tutorial for running CanItEdit
