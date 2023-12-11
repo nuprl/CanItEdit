@@ -633,8 +633,7 @@ if __name__ == "__main__":
         "--model-type",
         type=str,
         default="codellama",
-        choices=["codellama", "codellama-diff",
-                 "codellama-chat", "openai", "starcoder"],
+        choices=["codellama", "codellama-chat", "openai", "starcoder"],
     )
     parser.add_argument("--model", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
