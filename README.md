@@ -30,3 +30,15 @@ git clone --recurse-submodules https://github.com/nuprl/CanItEdit
 - `./editcoder` contains code to train an EditCoder model
 - `./editpackft` contains code to reproduce the EditPackFT dataset
 - `./requirements.txt` contains the requirements for running the code of this repository
+
+## Citation
+If you use this code or the CanItEdit benchmark, please cite our paper:
+
+```
+@misc{canitedit,
+  title = {Can It Edit? Evaluating the Ability of Large Language Models to Follow Code Editing Instructions},
+  author = {Federico Cassano and Luisa Li and Akul Sethi and Noah Shinn and Abby Brennan-Jones and Anton Lozhkov and Carolyn Anderson and Arjun Guha},
+  year = {2023},
+  month = dec,
+}
+```
