@@ -14,6 +14,14 @@ The CanItEdit benchmark dataset, EditCoder model, and EditPackFT dataset can be 
 - EditCoder: https://huggingface.co/nuprl/EditCoder-6.7b-v1
 - EditPackFT: https://huggingface.co/datasets/nuprl/EditPackFT
 
+## Cloning the repository
+It is very important to clone this repository and initialize all submodule recursively.
+This can be done with the following command:
+
+```bash
+git clone --recurse-submodules https://github.com/nuprl/CanItEdit
+```
+
 ## Structure
 
 - `./benchmark` contains the CanItEdit benchmark dataset and code for generating and evaluating completions
