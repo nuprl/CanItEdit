@@ -10,7 +10,7 @@ EditPackFT and EditCoder, a dataset and a LLM built for instructional code editi
 
 The CanItEdit benchmark dataset, EditCoder model, and EditPackFT dataset can be found on HuggingFace:
 
-- CanItEdit: https://huggingface.co/nuprl/CanItEdit
+- CanItEdit: https://huggingface.co/datasets/nuprl/CanItEdit
 - EditCoder: https://huggingface.co/nuprl/EditCoder-6.7b-v1
 - EditPackFT: https://huggingface.co/datasets/nuprl/EditPackFT
 
