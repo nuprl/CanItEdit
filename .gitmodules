@@ -4,3 +4,6 @@
 [submodule "MultiPL-E"]
 	path = MultiPL-E
 	url = https://github.com/nuprl/MultiPL-E
+[submodule "editpackft/code-dedup"]
+	path = editpackft/code-dedup
+	url = https://github.com/cassanof/code-dedup
