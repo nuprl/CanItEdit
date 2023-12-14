@@ -29,7 +29,7 @@ git clone --recurse-submodules https://github.com/nuprl/CanItEdit
 - `./benchmark` contains the CanItEdit benchmark dataset and code for generating and evaluating completions
 - `./editcoder` contains code to train an EditCoder model
 - `./editpackft` contains code to reproduce the EditPackFT dataset
-- `./requirements.txt` contains the requirements for running the code of this repository
+- `./requirements.txt` contains the requirements for running the code in this repository
 
 ## Citation
 If you use this code or the CanItEdit benchmark, please cite our paper:
