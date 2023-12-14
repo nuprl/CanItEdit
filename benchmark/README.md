@@ -44,4 +44,8 @@ For example, to retrieve the results from the previous step, you can run:
 python pass_k.py ./outputs
 ```
 
-You will be provided with a CSV-formatted table with the results.
+You will be provided with a CSV-formatted table with the results, including `pass@1` and `ExcessCode` metrics.
+You can provide a `-k` parameter to the script to change the value of `k` for the `pass@k` metric.
+```
+python pass_k.py -k 5 ./outputs
+```
