@@ -37,7 +37,7 @@ If you use this code or the CanItEdit benchmark, please cite our paper:
 ```
 @misc{canitedit,
   title = {Can It Edit? Evaluating the Ability of Large Language Models to Follow Code Editing Instructions},
-  author = {Federico Cassano and Luisa Li and Akul Sethi and Noah Shinn and Abby Brennan-Jones and Anton Lozhkov and Carolyn Anderson and Arjun Guha},
+  author = {Federico Cassano and Luisa Li and Akul Sethi and Noah Shinn and Abby Brennan-Jones and Anton Lozhkov and Carolyn Jane Anderson and Arjun Guha},
   year = {2023},
   month = dec,
 }
