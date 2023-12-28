@@ -5,7 +5,7 @@ updating a program given a natural language instruction. The benchmark contains 
 hand-crafted Python programs with `before` and `after` code blocks,
 two types of natural language instructions (descriptive and lazy), and a hidden test suite.
 
-See [our paper](https://federico.codes/assets/papers/canitedit.pdf) for more.
+#### See [our paper](https://arxiv.org/abs/2312.12450) for more.
 
 This repository provides code for evaluating models on the benchmark, and the code to reproduce
 EditPackFT and EditCoder, a dataset and a LLM built for instructional code editing.
