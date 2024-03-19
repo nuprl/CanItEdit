@@ -1,10 +1,28 @@
 import tempfile
 from pathlib import Path
 import subprocess
-from typing import Optional
+from typing import Optional, List, Tuple
 
 
-def coverage(code: str, timeout=60) -> Optional[int]:
+def parse_missing_ranges(missing: str) -> List[int]:
+    """
+    E.g. 4, 17-18, 26, 29, 32, 35, 38, 41, 44, 47-51, 54
+    Into:
+    [4, 17, 18, 26, 29, 32, 35, 38, 41, 44, 47, 48, 49, 50, 51, 54]
+    [4, 17, 18, 26, 29, 32, 35, 38, 41, 44, 47, 48, 49, 50, 51, 54]
+    """
+    ranges = missing.split(", ")
+    result = []
+    for r in ranges:
+        if "-" in r:
+            start, end = r.split("-")
+            result.extend(range(int(start), int(end) + 1))
+        else:
+            result.append(int(r))
+    return result
+
+
+def coverage(code: str, timeout=60) -> Optional[Tuple[int, List[int]]]:
     # create a temporary file
     with tempfile.NamedTemporaryFile(delete=False, mode='w') as tmp_file:
         tmp_file_name = tmp_file.name
@@ -14,16 +32,20 @@ def coverage(code: str, timeout=60) -> Optional[int]:
 
     def run_coverage():
         # run coverage analysis
-        proc = subprocess.run(
-            ['coverage', 'run', '--data-file', cov_file_name, tmp_file_name],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
-        )
+        try:
+            proc = subprocess.run(
+                ['coverage', 'run', '--data-file', cov_file_name, tmp_file_name],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            print("Coverage timedout...")
+            return None
         if proc.returncode != 0:
             return None
 
         # generate coverage report
         proc = subprocess.run(
-            ['coverage', 'report', '--data-file', cov_file_name],
+            ['coverage', 'report', '-m', '--data-file', cov_file_name],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
         )
         if proc.returncode != 0:
@@ -32,15 +54,18 @@ def coverage(code: str, timeout=60) -> Optional[int]:
         # parse coverage percentage
         cov_percentage = 0
         next_is_cov = False
+        missing = []
         for line in proc.stdout.decode().splitlines():
             if next_is_cov:
                 parts = [s.strip('%') for s in line.split() if s]
                 cov_percentage = int(parts[3])
+                if cov_percentage < 100:
+                    missing = parse_missing_ranges(" ".join(parts[4:]))
                 break
             elif line.startswith("---------"):
                 next_is_cov = True
 
-        return int(cov_percentage)
+        return cov_percentage, missing
 
     result = run_coverage() or None
 
@@ -52,15 +77,25 @@ def coverage(code: str, timeout=60) -> Optional[int]:
 
 
 def process_comp(comp):
+    if "program_no_test" not in comp:
+        # add program without tests
+        program_no_test = comp["program"].split("### START TESTS ###\n")[0]
+        comp["program_no_test"] = program_no_test
     if "coverage" in comp:
         return comp
     if comp["status"] == "OK":
         cov = coverage(comp["program"])
+        if cov:
+            comp["coverage"], comp["coverage_missing"] = cov
+        else:
+            comp["coverage"] = None
+            comp["coverage_missing"] = None
     else:
-        cov = None
-    comp["coverage"] = cov
+        comp["coverage"] = None
+        comp["coverage_missing"] = None
     return comp
 
+SUPPORTED_LANGS = ["py"]
 
 if __name__ == "__main__":
     # import main from the real evaluator
@@ -90,6 +125,9 @@ if __name__ == "__main__":
         with open_json(path, "r") as f:
             results = json.load(f)
 
+        lang = results['language']
+        if lang not in SUPPORTED_LANGS:
+            continue
         comps = results['results']
         all_had_cov = all("coverage" in comp for comp in comps)
 
