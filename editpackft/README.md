@@ -6,6 +6,8 @@ and the `format.py` script adds the training prompt to each example.
 
 A pre-built EditPackFT dataset can be found at: https://huggingface.co/datasets/nuprl/EditPackFT
 
+The code and dataset for Commits2023FT will be released soon.
+
 ## Near-Deduplication
 
 An additional step is used to remove near-duplicate examples from the dataset.

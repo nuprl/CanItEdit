@@ -2,6 +2,7 @@
 
 This directory contains code to fine-tune EditCoder, a DeepSeek-Coder-Base-6.7b model fine-tuned on
 EditPackFT for instructional code editing.
+The code to train the model on Commits2023FT will be released soon.
 
 To run the training, a `./run.sh` script is provided; it requires a deepspeed config as an argument,
 we provide two DeepSpeed configs: `./deepspeed.json` and `./deepspeed_offload.json`. The former
