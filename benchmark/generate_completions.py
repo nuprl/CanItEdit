@@ -1001,7 +1001,7 @@ if __name__ == "__main__":
         "--model-type",
         type=str,
         default="direct",
-        choices=["direct", "reldiff", "multidiff", "direct-1shot",
+        choices=["direct", "direct-1shot",
                  "openai", "chat", "octocoder", "starcoder", "starcoder2"],
         help="type of model to use for completions",
     )
