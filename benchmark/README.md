@@ -46,6 +46,15 @@ python pass_k.py ./outputs
 
 You will be provided with a CSV-formatted table with the results, including `pass@1` and `ExcessCode` metrics.
 You can provide a `-k` parameter to the script to change the value of `k` for the `pass@k` metric.
+
 ```
 python pass_k.py -k 5 ./outputs
 ```
+
+### Separating Results Based on Taxonomy
+
+We provide two scripts that allow you to separate the results based on the taxonomy of the programs.
+
+- `./separate_results.sh` simply separates the results based on the instruction kind (descriptive and lazy), as done in the paper.
+- `./separate_results_on_change_kind.sh` separates the results based on the change kind (corrective, perfective, and adaptive).
+  This scripts requires `jq` to be installed on your system.
