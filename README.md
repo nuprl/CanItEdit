@@ -1,7 +1,7 @@
 # Can It Edit? Evaluating the Ability of Large Language Models to Follow Code Editing Instructions
 
 CanItEdit is a benchmark for evaluating LLMs on instructional code editing, the task of
-updating a program given a natural language instruction. The benchmark contains 54
+updating a program given a natural language instruction. The benchmark contains 105
 hand-crafted Python programs with `before` and `after` code blocks,
 two types of natural language instructions (descriptive and lazy), and a hidden test suite.
 
