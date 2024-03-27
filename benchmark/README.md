@@ -5,9 +5,9 @@ This directory contains programs to generate CanItEdit completions and evaluate 
 ## Generating completions
 
 To generate completions, you can use the `generate_completions.py` script.
-It takes a `--model` parameter that specifies the model to use, and a `--model-type` parameter that specifies the type of the model, for example `codellama` or `starcoder`.
+It takes a `--model` parameter that specifies the model to use, and a `--model-type` parameter that specifies the type of the model, for example `direct` or `starcoder`.
 The `--model-type` parameter mostly control the kind of prompt that is used to generate the completions.
-To evaluate the EditCoder model, teh `--model-type` parameter should be set to `codellama`.
+To evaluate the EditCoder model, the `--model-type` parameter should be set to `direct`.
 There is also `--output-dir` parameter, which points to the output directory where the
 completions will be saved.
 Other parameters can be found by running `python generate_completions.py --help`.
@@ -16,7 +16,7 @@ Here is an example of how to evaluate EditCoder, with 20 completions per program
 size, temperature 0.2, top-p 0.95, and 4096 max tokens:
 
 ```bash
-python generate_completions.py --model-type codellama --model nuprl/EditCoder-6.7b-v1 --output-dir outputs --completion-limit 20 --batch-size 5 --temperature 0.2 --top-p 0.95 --max-tokens 4096
+python generate_completions.py --model-type direct --model nuprl/EditCoder-6.7b-v1 --output-dir outputs --completion-limit 20 --batch-size 5 --temperature 0.2 --top-p 0.95 --max-tokens 4096
 ```
 
 ## Executing Tests on The Completions
