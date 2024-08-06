@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Cassano"
+    given-names: "Federico"
+  - family-names: "Li"
+    given-names: "Luisa"
+  - family-names: "Sethi"
+    given-names: "Akul"
+  - family-names: "Shinn"
+    given-names: "Noah"
+  - family-names: "Brennan-Jones"
+    given-names: "Abby"
+  - family-names: "Lozkhov"
+    given-names: "Anton"
+  - family-names: "Anderson"
+    given-names: "Carolyn Jane"
+  - family-names: "Guha"
+    given-names: "Arjun"
+title: "Can It Edit? Evaluating the Ability of Large Language Models to Follow Code Editing Instructions"
+version: 1.0.0
+date-released: 2024
+url: "https://github.com/example/canitredit"
+preferred-citation:
+  type: conference-paper
+  authors:
+    - family-names: "Cassano"
+      given-names: "Federico"
+    - family-names: "Li"
+      given-names: "Luisa"
+    - family-names: "Sethi"
+      given-names: "Akul"
+    - family-names: "Shinn"
+      given-names: "Noah"
+    - family-names: "Brennan-Jones"
+      given-names: "Abby"
+    - family-names: "Lozkhov"
+      given-names: "Anton"
+    - family-names: "Anderson"
+      given-names: "Carolyn Jane"
+    - family-names: "Guha"
+      given-names: "Arjun"
+  title: "Can It Edit? Evaluating the Ability of Large Language Models to Follow Code Editing Instructions"
+  year: 2024
+  conference:
+    name: "Conference on Language Modelling (COLM)"
