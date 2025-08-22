@@ -16,7 +16,11 @@ Here is an example of how to evaluate EditCoder, with 20 completions per program
 size, temperature 0.2, top-p 0.95, and 4096 max tokens:
 
 ```bash
-python generate_completions.py --model-type direct --model nuprl/EditCoder-6.7b-v1 --output-dir outputs --completion-limit 20 --batch-size 5 --temperature 0.2 --top-p 0.95 --max-tokens 4096
+uv run python generate_completions.py --model-type direct --model hosted_vllm/Qwen/Qwen3-4B-Base --completion-engine litellm --output-dir outputs --completion-limit 20 --batch-size 1 --temperature 0.2 --top-p 0.95 --max-tokens 4096
+```
+
+```
+uv run python generate_completions.py --model-type chat --model hosted_vllm/Qwen/Qwen3-4B --completion-engine litellm --output-dir outputsChat --completion-limit 20 --batch-size 5 --temperature 0.2 --top-p 0.95 --max-tokens 4096
 ```
 
 ## Executing Tests on The Completions
