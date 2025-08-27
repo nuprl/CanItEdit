@@ -1,6 +1,3 @@
-[submodule "editcoder/finetuning-harness"]
-	path = editcoder/finetuning-harness
-	url = https://github.com/cassanof/finetuning-harness
 [submodule "MultiPL-E"]
 	path = MultiPL-E
 	url = https://github.com/nuprl/MultiPL-E

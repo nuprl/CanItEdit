@@ -1,0 +1,17 @@
+[project]
+name = "canitedit"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=4.0.0",
+    "huggingface-hub>=0.34.4",
+    "litellm>=1.75.9",
+    "openai>=1.100.2",
+    "torch>=2.7.1",
+    "tqdm>=4.67.1",
+    "transformers>=4.55.2",
+    "vllm==0.10.1.1",
+    "wandb>=0.21.1",
+]
