@@ -5,9 +5,49 @@ import torch
 from typing import List, Literal, Optional, TypedDict, Callable, Union, TypeVar
 import gzip
 import json
-from litellm import completion, text_completion, batch_completion
+from litellm import text_completion, batch_completion
 
-#its a batch generator for code-edit edits.
+"""
+This script evaluates models on the CanItEdit dataset using vLLM for hosting
+and LiteLLM as the client for inference.
+
+Model types:
+- Base models: use `--model-type direct`
+- Instruction-tuned models: use `--model-type chat`
+
+Examples:
+1. Evaluating a Base Model (e.g., Qwen3-4B-Base)
+
+   Serve the model:
+       uv run vllm serve Qwen/Qwen3-4B-Base --port 8000
+
+   Run the evaluation script:
+       uv run python generate_completions.py \
+           --model-type direct \
+           --model hosted_vllm/Qwen/Qwen3-4B-Base \
+           --output-dir outputs \
+           --completion-limit 20 \
+           --batch-size 10 \
+           --temperature 0.2 \
+           --top-p 0.95 \
+           --max-tokens 4096
+
+2. Evaluating an Instruction-Tuned Model (e.g., Qwen3-4B-Instruct)
+
+   Serve the model:
+       uv run vllm serve Qwen/Qwen3-4B-Instruct-2507 --port 8000
+
+   Run the evaluation script:
+       uv run python generate_completions.py \
+           --model-type chat \
+           --model hosted_vllm/Qwen/Qwen3-4B-Instruct-2507 \
+           --output-dir outputsChat \
+           --completion-limit 20 \
+           --batch-size 10 \
+           --temperature 0.2 \
+           --top-p 0.95 \
+           --max-tokens 4096
+"""
 
 def gunzip_json_write(path: Path, data: dict) -> None:
     with gzip.open(path, "wt") as f:
@@ -61,9 +101,6 @@ MessagesFormatFunction = Callable[[str, str], List[Message]]
 # (old, new) -> response
 PostProcessFunction = Callable[[str, str], str]
 
-
-CompletionEngine = Literal["litellm"]
-
 def direct_edit_prompt(
     old,
     instr,
@@ -86,54 +123,28 @@ def direct_edit_prompt(
     after = f"""## Code After:\n{new}"""
     return before + instr + after
 
-def openai_edit_prompt_1shot(old: str, instr: str) -> List[Message]:
+def chat_edit_prompt_zeroshot(old: str, instr: str) -> List[Message]:
     return [
         {
             "role": "system",
             "content": """
 You are PythonEditGPT. You will be provided the original code snippet and an instruction that specifies the changes you need to make. You will produce the changed code, based on the original code and the instruction given. Only produce the code, do not include any additional prose.
-             """.strip(),
-        },
-        {
-            "role": "user",
-            "content": """
-## Code Before
-```py
-def add(a, b):
-    return a + b
-```
-
-## Instruction
-Add a "sub" function that subtracts two numbers. Also write docstrings for both functions and change a,b to x,y.
-""".strip(),
-        },
-        {
-            "role": "assistant",
-            "content": """
-## Code After
-```py
-def add(x, y):
-    \"\"\"Adds two numbers.\"\"\"
-    return x + y
-
-def sub(x, y):
-    \"\"\"Subtracts two numbers.\"\"\"
-    return x - y
-```
-         """.strip(),
+            """.strip(),
         },
         {
             "role": "user",
             "content": f"""
-## Code Before
-```py
-{old}
-```
-## Instruction
-{instr}
-""".strip(),
-        },
-    ]
+                ## Code Before
+                ```py
+                {old}
+                ```
+
+                ## Instruction
+                {instr}
+
+                ## Code After""".strip()
+            },
+        ]
 
 def python_markdown_codeblock_extract(_: str, new: str) -> str:
     # print("prior to extracting codeblock:", new)
@@ -150,13 +161,6 @@ def python_markdown_codeblock_extract(_: str, new: str) -> str:
             buf += ln + "\n"
     # print("after extracting codeblock:", buf)
     return buf
-
-
-def autodetect_dtype() -> str:
-    if torch.cuda.is_bf16_supported():
-        return "bfloat16"
-    else:
-        return "auto"
 
 class LiteLLMChat:
     def __init__(self, model_name: str, **kwargs):
@@ -206,49 +210,27 @@ class LiteLLMBase:
 
 
 class EditModel:
-    def __init__(self, before_content_tok=None, instruction_tok=None, after_content_tok=None):
-        self.before_content_tok = before_content_tok
-        self.instruction_tok = instruction_tok
-        self.after_content_tok = after_content_tok
+    def __init__(self):
+        pass
 
     def edit_model_generate(
         self,
         model: Union[LiteLLMBase, LiteLLMChat],
         str_prompts: List[str], **kwargs
     ) -> List[str]:
-        kwargs_gen = kwargs.copy()
-        if "declaration" in kwargs_gen:
-            del kwargs_gen["declaration"]
-        use_tqdm = kwargs_gen.pop("use_tqdm", False)
         gens = model.generate(
             prompts=str_prompts,
-            top_p=kwargs_gen.pop("top_p", 0.95),
-            temperature=kwargs_gen.pop("temperature", 0.2),
-            max_tokens=kwargs_gen.pop("max_tokens", 1024),
-            use_tqdm=use_tqdm,
-            **kwargs_gen,
+            top_p=kwargs.pop("top_p", 0.95),
+            temperature=kwargs.pop("temperature", 0.2),
+            max_tokens=kwargs.pop("max_tokens", 1024),
+            **kwargs,
         )
         return gens
-
-    def get_before_content_tok(self) -> Optional[str]:
-        return self.before_content_tok
-
-    def get_instruction_tok(self) -> Optional[str]:
-        return self.instruction_tok
-
-    def get_after_content_tok(self) -> Optional[str]:
-        return self.after_content_tok
 
     def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
         raise NotImplementedError
 
-    def bugfix_instr(self, prompt) -> Optional[str]:
-        return None
-
     def get_prompt_format(self):
-        raise NotImplementedError
-
-    def get_tokenizer(self):
         raise NotImplementedError
 
 
@@ -261,19 +243,14 @@ class DirectEditModel(EditModel):
     def __init__(
         self,
         model_name,
-        num_gpus=1,
-        gpu_util=0.95,
         prompt_format: PromptFormatFunction = direct_edit_prompt,
         post_process: PostProcessFunction = lambda old, new: new,
-        completion_engine: CompletionEngine = "litellm",
         stop_tokens: List[str] = ["## Code After:",
                                   "## Instruction:", "## Code Before:", "## Test Case:", "## Explanation:"],
-        max_model_len=None,
     ):
         super().__init__()
         self.model = LiteLLMBase(
             model_name,
-            dtype=autodetect_dtype()
         )
         self.prompt_format = prompt_format
         self.post_process = post_process
@@ -283,11 +260,10 @@ class DirectEditModel(EditModel):
         str_prompts = []
 
         for prompt in prompts:
-            declaration = kwargs["declaration"] if "declaration" in kwargs else ""
             assert prompt["instruction"] is not None, "Not implemented yet"
             str_prompts.append(
                 self.prompt_format(
-                    prompt["content"], prompt["instruction"], declaration
+                    prompt["content"], prompt["instruction"]
                 )
             )
 
@@ -325,24 +301,17 @@ class ChatAdaptorEditModel(EditModel):
     def __init__(
         self,
         model_name,
-        prompt_format: MessagesFormatFunction = openai_edit_prompt_1shot,
+        prompt_format: MessagesFormatFunction = chat_edit_prompt_zeroshot,
         post_process: PostProcessFunction = python_markdown_codeblock_extract,
     ):
         super().__init__()
         self.model = LiteLLMChat(
             model_name,
-            dtype=autodetect_dtype(),
         )
         self.prompt_format = prompt_format
         self.post_process = post_process
 
     def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
-        kwargs = kwargs.copy()
-        # TODO: can do something with declaration here
-        kwargs.pop("declaration", None)
-
-        kwargs.pop("use_tqdm", None)
-
         chat_prompts = []
         for prompt in prompts:
             assert (
@@ -352,7 +321,6 @@ class ChatAdaptorEditModel(EditModel):
                 self.prompt_format(prompt["content"], prompt["instruction"])
             )
 
-        # generate
         gens = self.model.generate(chat_prompts, **kwargs)
 
         responses = []
@@ -368,18 +336,10 @@ class ChatAdaptorEditModel(EditModel):
 # and implement it in models.py. Also, add a new case in the argument parser below.
 def model_factory(
         model_type: str,
-        quantize=False,
-        num_gpus=1,
-        system_supported=True,
-        completion_engine: CompletionEngine = "litellm",
-        max_model_len=None,
 ) -> Callable[[str], EditModel]:
     if model_type == "direct":
         return (lambda path: DirectEditModel(
             path,
-            completion_engine=completion_engine,
-            num_gpus=num_gpus,
-            max_model_len=max_model_len,
         ))
     elif model_type == "chat":
         return (lambda path: ChatAdaptorEditModel(
@@ -404,11 +364,6 @@ def main(args):
         args.dataset, args.subset, split=args.split)
     model = model_factory(
         args.model_type,
-        quantize=args.quantize,
-        num_gpus=args.num_gpus,
-        system_supported=not args.no_system,
-        completion_engine=args.completion_engine,
-        max_model_len=args.max_model_len,
     )(args.model)
     model_kwargs = {
         "temperature": args.temperature,
@@ -423,10 +378,7 @@ def main(args):
     for ex in tqdm(dataset, total=len(dataset)):  # type: ignore
         assert isinstance(ex, dict)
 
-        if args.humanevalpack:
-            instr_kinds = ['instruction']
-        else:
-            instr_kinds = ['instruction_descriptive', 'instruction_lazy']
+        instr_kinds = ['instruction_descriptive', 'instruction_lazy']
 
         for instr_kind in instr_kinds:
             path = Path(args.output_dir) / \
@@ -439,10 +391,6 @@ def main(args):
                 instruction=instr,
                 content=ex["before"],
             )
-
-            if "declaration" in ex:
-                model_kwargs["declaration"] = ex["declaration"]
-
             completions = complete_problem(
                 example,
                 model,
@@ -458,7 +406,7 @@ def main(args):
 
             result["instr_kind"] = instr_kind
             # this is for compatibility with the MultiPL-E evaluator
-            result["prompt"] = ex["declaration"] if "declaration" in ex else ""
+            result["prompt"] = ""
             result["completions"] = completions
             result["language"] = "py"
             result["temperature"] = args.temperature
@@ -483,14 +431,8 @@ if __name__ == "__main__":
         "--model-type",
         type=str,
         default="direct",
-        choices=["direct","chat"],
+        choices=["direct","chat", "chat_oneshot"],
         help="type of model to use for completions",
-    )
-    parser.add_argument(
-        "--completion-engine",
-        type=str,
-        default="litellm",
-        choices=["litellm"],
     )
     parser.add_argument("--model", type=str, required=True,
                         help="path to model or hub name")
@@ -502,19 +444,9 @@ if __name__ == "__main__":
                         default=20, help="number of completions per prompt")
     parser.add_argument("--temperature", type=float,
                         default=0.2, help="sampling temperature")
-    parser.add_argument("--quantize", action="store_true",
-                        help="quantize the model with AWQ")
-    parser.add_argument("--humanevalpack", action="store_true",
-                        help="run humanevalpack instead of CanItEdit")
     parser.add_argument("--top-p", type=float,
                         default=0.95, help="top-p sampling")
     parser.add_argument("--max-tokens", type=int,
                         default=2048, help="max new tokens to generate per completion. 2048 works for CanItEdit")
-    parser.add_argument("--max-model-len", type=int, default=None,
-                        help="max model length for batching with vLLM. only change if getting OOM")
-    parser.add_argument("--num-gpus", type=int, default=1,
-                        help="number of gpus for sharded model")
-    parser.add_argument("--no-system", action="store_true",
-                        help="disable system prompt for chat models")
     args = parser.parse_args()
     main(args)
