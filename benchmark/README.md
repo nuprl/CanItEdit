@@ -3,21 +3,63 @@
 This directory contains programs to generate CanItEdit completions and evaluate them.
 
 ## Generating completions
+To generate completions, you can use the generate_completions.py script.
+This script evaluates models on the CanItEdit dataset using vLLM for hosting
+and LiteLLM as the client for inference.
 
-To generate completions, you can use the `generate_completions.py` script.
-It takes a `--model` parameter that specifies the model to use, and a `--model-type` parameter that specifies the type of the model, for example `direct` or `starcoder`.
-The `--model-type` parameter mostly control the kind of prompt that is used to generate the completions.
-To evaluate the EditCoder model, the `--model-type` parameter should be set to `direct`.
-There is also `--output-dir` parameter, which points to the output directory where the
-completions will be saved.
-Other parameters can be found by running `python generate_completions.py --help`.
+It takes a `--model` parameter that specifies the model to use, and a `--model-type` parameter that specifies the type of the model.
+- Base models: use `--model-type direct`
+- Instruction-tuned models: use `--model-type chat`
+The completions are zero-shot for both base and chat models.
+
+Examples:
+1. Evaluating a Base Model (e.g., Qwen3-4B-Base)
+First, Serve the model:
+```bash
+uv run vllm serve Qwen/Qwen3-4B-Base --port 8000
+```
+
+Then Run the evaluation script:
+```bash
+uv run python generate_completions.py \
+    --model-type direct \
+    --model hosted_vllm/Qwen/Qwen3-4B-Base \
+    --output-dir outputs \
+    --completion-limit 20 \
+    --batch-size 10 \
+    --temperature 0.2 \
+    --top-p 0.95 \
+    --max-tokens 4096
+```
+
+2. Evaluating an Instruction-Tuned Model (e.g., Qwen3-4B-Instruct)
+First, Serve the model:
+```bash
+uv run vllm serve Qwen/Qwen3-4B-Instruct-2507 --port 8000
+```
+
+Then Run the evaluation script:
+```bash
+uv run python generate_completions.py \
+    --model-type chat \
+    --model hosted_vllm/Qwen/Qwen3-4B-Instruct-2507 \
+    --output-dir outputsChat \
+    --completion-limit 20 \
+    --batch-size 10 \
+    --temperature 0.2 \
+    --top-p 0.95 \
+    --max-tokens 4096
+```
+
+
+To generate completions without serving a model locally (or for models that require special handling), use the generate_completions_specific.py script.
 
 Here is an example of how to evaluate EditCoder, with 20 completions per program, 5 batch
-size, temperature 0.2, top-p 0.95, and 4096 max tokens:
-
+size, temperature 0.2, top-p 0.95, and 4096 max tokens. To evaluate the EditCoder model, the `--model-type` parameter should be set to `direct`.
 ```bash
 python generate_completions.py --model-type direct --model nuprl/EditCoder-6.7b-v1 --output-dir outputs --completion-limit 20 --batch-size 5 --temperature 0.2 --top-p 0.95 --max-tokens 4096
 ```
+
 
 ## Executing Tests on The Completions
 
