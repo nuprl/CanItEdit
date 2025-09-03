@@ -67,7 +67,6 @@ PostProcessFunction = Callable[[str, str], str]
 def direct_edit_prompt(
     old,
     instr,
-    new,
     codeblock_before: Optional[str] = None,
     codeblock_after: Optional[str] = None,
 ):
@@ -83,7 +82,7 @@ def direct_edit_prompt(
         new = f"```{codeblock_after}\n{new}\n```"
     before = f"""## Code Before:\n{old}\n"""
     instr = f"""## Instruction:\n{instr}\n"""
-    after = f"""## Code After:\n{new}"""
+    after = f"""## Code After:\n"""
     return before + instr + after
 
 def chat_edit_prompt_zeroshot(old: str, instr: str) -> List[Message]:
@@ -126,8 +125,9 @@ def python_markdown_codeblock_extract(_: str, new: str) -> str:
     return buf
 
 class LiteLLMChat:
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, port:int, **kwargs):
         self.model_name = model_name
+        self.api_base = f"http://localhost:{port}/v1"
 
     def generate(
         self,
@@ -137,7 +137,7 @@ class LiteLLMChat:
         responses = []
         response = batch_completion(
             model=self.model_name,
-            api_base="http://localhost:8000/v1",
+            api_base=self.api_base,
             messages=prompts,
             **kwargs,
         )
@@ -149,8 +149,9 @@ class LiteLLMChat:
         return responses
 
 class LiteLLMBase:
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, port: int, **kwargs):
         self.model_name = model_name
+        self.api_base = f"http://localhost:{port}/v1"
 
     def generate(
         self,
@@ -161,7 +162,7 @@ class LiteLLMBase:
         for prompt in prompts:
             response = text_completion(
                 model=self.model_name,
-                api_base="http://localhost:8000/v1",
+                api_base=self.api_base,
                 prompt=prompt,
                 **kwargs,
             )
@@ -175,20 +176,6 @@ class LiteLLMBase:
 class EditModel:
     def __init__(self):
         pass
-
-    def edit_model_generate(
-        self,
-        model: Union[LiteLLMBase, LiteLLMChat],
-        str_prompts: List[str], **kwargs
-    ) -> List[str]:
-        gens = model.generate(
-            prompts=str_prompts,
-            top_p=kwargs.pop("top_p", 0.95),
-            temperature=kwargs.pop("temperature", 0.2),
-            max_tokens=kwargs.pop("max_tokens", 1024),
-            **kwargs,
-        )
-        return gens
 
     def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
         raise NotImplementedError
@@ -206,6 +193,7 @@ class DirectEditModel(EditModel):
     def __init__(
         self,
         model_name,
+        port: int,
         prompt_format: PromptFormatFunction = direct_edit_prompt,
         post_process: PostProcessFunction = lambda old, new: new,
         stop_tokens: List[str] = ["## Code After:",
@@ -213,7 +201,7 @@ class DirectEditModel(EditModel):
     ):
         super().__init__()
         self.model = LiteLLMBase(
-            model_name,
+            model_name, port=port
         )
         self.prompt_format = prompt_format
         self.post_process = post_process
@@ -235,7 +223,7 @@ class DirectEditModel(EditModel):
         kwargs["stop"] = stop + self.stop_tokens
 
         # generate
-        gens = self.edit_model_generate(self.model, str_prompts, **kwargs)
+        gens = self.model.generate(str_prompts, **kwargs)
 
         responses = []
         for prompt, gen in zip(prompts, gens):
@@ -264,12 +252,14 @@ class ChatAdaptorEditModel(EditModel):
     def __init__(
         self,
         model_name,
+        port: int,
         prompt_format: MessagesFormatFunction = chat_edit_prompt_zeroshot,
         post_process: PostProcessFunction = python_markdown_codeblock_extract,
     ):
         super().__init__()
         self.model = LiteLLMChat(
             model_name,
+            port=port
         )
         self.prompt_format = prompt_format
         self.post_process = post_process
@@ -299,14 +289,17 @@ class ChatAdaptorEditModel(EditModel):
 # and implement it in models.py. Also, add a new case in the argument parser below.
 def model_factory(
         model_type: str,
+        port: int
 ) -> Callable[[str], EditModel]:
     if model_type == "direct":
         return (lambda path: DirectEditModel(
             path,
+            port=port
         ))
     elif model_type == "chat":
         return (lambda path: ChatAdaptorEditModel(
             path,
+            port=port
         ))
 
 
@@ -314,7 +307,7 @@ def complete_problem(example: EditCommand, model: EditModel, batch_size: int, co
     batches = batch_prompts_from_example(example, batch_size, completion_limit)
 
     completions = []
-    for batch in batches:
+    for batch in batches: #Each batch is a list of dicts
         resps = model.generate(batch, **kwargs)
         for resp in resps:
             completions.append(resp["content"])
@@ -327,6 +320,7 @@ def main(args):
         args.dataset, args.subset, split=args.split)
     model = model_factory(
         args.model_type,
+        args.port
     )(args.model)
     model_kwargs = {
         "temperature": args.temperature,
@@ -411,5 +405,7 @@ if __name__ == "__main__":
                         default=0.95, help="top-p sampling")
     parser.add_argument("--max-tokens", type=int,
                         default=2048, help="max new tokens to generate per completion. 2048 works for CanItEdit")
+    parser.add_argument("--port", type=int, default=8000,
+                        help="port to run the server on")
     args = parser.parse_args()
     main(args)

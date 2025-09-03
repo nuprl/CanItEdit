@@ -16,7 +16,7 @@ Examples:
 1. Evaluating a Base Model (e.g., Qwen3-4B-Base)
 First, Serve the model:
 ```bash
-uv run vllm serve Qwen/Qwen3-4B-Base --port 8000
+uv run vllm serve Qwen/Qwen3-4B-Base --port 5000
 ```
 
 Then Run the evaluation script:
@@ -24,18 +24,19 @@ Then Run the evaluation script:
 uv run python generate_completions.py \
     --model-type direct \
     --model hosted_vllm/Qwen/Qwen3-4B-Base \
-    --output-dir outputs \
+    --output-dir outputsBase \
     --completion-limit 20 \
     --batch-size 10 \
     --temperature 0.2 \
     --top-p 0.95 \
-    --max-tokens 4096
+    --max-tokens 4096 \
+    --port 5000
 ```
 
 2. Evaluating an Instruction-Tuned Model (e.g., Qwen3-4B-Instruct)
 First, Serve the model:
 ```bash
-uv run vllm serve Qwen/Qwen3-4B-Instruct-2507 --port 8000
+uv run vllm serve Qwen/Qwen3-4B-Instruct-2507 --port 5000
 ```
 
 Then Run the evaluation script:
@@ -48,7 +49,8 @@ uv run python generate_completions.py \
     --batch-size 10 \
     --temperature 0.2 \
     --top-p 0.95 \
-    --max-tokens 4096
+    --max-tokens 4096 \
+    --port 5000
 ```
 
 
