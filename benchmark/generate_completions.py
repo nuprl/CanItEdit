@@ -96,15 +96,15 @@ You are PythonEditGPT. You will be provided the original code snippet and an ins
         {
             "role": "user",
             "content": f"""
-                ## Code Before
-                ```py
-                {old}
-                ```
+## Code Before
+```py
+{old}
+```
 
-                ## Instruction
-                {instr}
+## Instruction
+{instr}
 
-                ## Code After""".strip()
+## Code After""".strip()
             },
         ]
 
