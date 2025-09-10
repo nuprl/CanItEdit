@@ -1,16 +1,23 @@
-import datasets
-from pathlib import Path
-from tqdm import tqdm
-import torch
-from typing import List, Literal, Optional, TypedDict, Callable, Union, TypeVar
-import gzip
-import json
-from litellm import text_completion, batch_completion
-
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = "==3.12.*"
+# dependencies = [
+#     "litellm",
+#     "tqdm",
+# ]
+# ///
 """
 This script evaluates models on the CanItEdit dataset using vLLM for hosting
 and LiteLLM as the client for inference.
 """
+import datasets
+from pathlib import Path
+from tqdm import tqdm
+from typing import List, Literal, Optional, TypedDict, Callable, TypeVar
+import gzip
+import json
+from litellm import text_completion, batch_completion
+
 
 def gunzip_json_write(path: Path, data: dict) -> None:
     with gzip.open(path, "wt") as f:
