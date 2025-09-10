@@ -285,22 +285,6 @@ class ChatAdaptorEditModel(EditModel):
         return responses
 
 
-# NOTE: this is the factory for each model type. to add a new model type, add a new case here
-# and implement it in models.py. Also, add a new case in the argument parser below.
-def model_factory(
-        model_type: str,
-        port: int
-) -> Callable[[str], EditModel]:
-    if model_type == "direct":
-        return (lambda path: DirectEditModel(
-            path,
-            port=port
-        ))
-    elif model_type == "chat":
-        return (lambda path: ChatAdaptorEditModel(
-            path,
-            port=port
-        ))
 
 
 def complete_problem(example: EditCommand, model: EditModel, batch_size: int, completion_limit: int, **kwargs) -> List[str]:
@@ -318,10 +302,14 @@ def complete_problem(example: EditCommand, model: EditModel, batch_size: int, co
 def main(args):
     dataset = datasets.load_dataset(
         args.dataset, args.subset, split=args.split)
-    model = model_factory(
-        args.model_type,
-        args.port
-    )(args.model)
+    
+    # Direct model instantiation based on model_type
+    if args.model_type == "direct":
+        model = DirectEditModel(args.model, port=args.port)
+    elif args.model_type == "chat":
+        model = ChatAdaptorEditModel(args.model, port=args.port)
+    else:
+        raise ValueError(f"Unknown model type: {args.model_type}")
     model_kwargs = {
         "temperature": args.temperature,
         "top_p": args.top_p,
