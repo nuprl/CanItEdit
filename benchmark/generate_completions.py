@@ -131,53 +131,6 @@ def python_markdown_codeblock_extract(_: str, new: str) -> str:
     # print("after extracting codeblock:", buf)
     return buf
 
-class LiteLLMChat:
-    def __init__(self, model_name: str, port:int, **kwargs):
-        self.model_name = model_name
-        self.api_base = f"http://localhost:{port}/v1"
-
-    def generate(
-        self,
-        prompts: List[str],
-        **kwargs,
-    ) -> List[str]:
-        responses = []
-        response = batch_completion(
-            model=self.model_name,
-            api_base=self.api_base,
-            messages=prompts,
-            **kwargs,
-        )
-
-        for res in response:
-            generated_text = res.choices[0]['message']['content']
-            responses.append(generated_text)
-
-        return responses
-
-class LiteLLMBase:
-    def __init__(self, model_name: str, port: int, **kwargs):
-        self.model_name = model_name
-        self.api_base = f"http://localhost:{port}/v1"
-
-    def generate(
-        self,
-        prompts: List[str],
-        **kwargs,
-    ) -> List[str]:
-        responses = []
-        for prompt in prompts:
-            response = text_completion(
-                model=self.model_name,
-                api_base=self.api_base,
-                prompt=prompt,
-                **kwargs,
-            )
-
-            generated_text = response.choices[0].text
-            responses.append(generated_text)
-
-        return responses
 
 
 class EditModel:
@@ -200,16 +153,13 @@ class DirectEditModel(EditModel):
     def __init__(
         self,
         model_name,
-        port: int,
         prompt_format: PromptFormatFunction = direct_edit_prompt,
         post_process: PostProcessFunction = lambda old, new: new,
         stop_tokens: List[str] = ["## Code After:",
                                   "## Instruction:", "## Code Before:", "## Test Case:", "## Explanation:"],
     ):
         super().__init__()
-        self.model = LiteLLMBase(
-            model_name, port=port
-        )
+        self.model_name = model_name
         self.prompt_format = prompt_format
         self.post_process = post_process
         self.stop_tokens = stop_tokens
@@ -229,11 +179,20 @@ class DirectEditModel(EditModel):
         stop = kwargs.pop("stop", [])
         kwargs["stop"] = stop + self.stop_tokens
 
-        # generate
-        gens = self.model.generate(str_prompts, **kwargs)
-
+        # Generate using text_completion directly
         responses = []
-        for prompt, gen in zip(prompts, gens):
+        for prompt in str_prompts:
+            response = text_completion(
+                model=self.model_name,
+                prompt=prompt,
+                **kwargs,
+            )
+            generated_text = response.choices[0].text
+            responses.append(generated_text)
+
+        # Process responses
+        final_responses = []
+        for prompt, gen in zip(prompts, responses):
             out = gen
             try:
                 processed = self.post_process(prompt["content"], out)
@@ -244,9 +203,9 @@ class DirectEditModel(EditModel):
                 print("Error in post processing:", e)
                 processed = out
             resp = {"content": processed, "instruction": None}
-            responses.append(resp)
+            final_responses.append(resp)
 
-        return responses
+        return final_responses
 
     def get_prompt_format(self):
         return self.prompt_format
@@ -259,15 +218,11 @@ class ChatAdaptorEditModel(EditModel):
     def __init__(
         self,
         model_name,
-        port: int,
         prompt_format: MessagesFormatFunction = chat_edit_prompt_zeroshot,
         post_process: PostProcessFunction = python_markdown_codeblock_extract,
     ):
         super().__init__()
-        self.model = LiteLLMChat(
-            model_name,
-            port=port
-        )
+        self.model_name = model_name
         self.prompt_format = prompt_format
         self.post_process = post_process
 
@@ -281,7 +236,18 @@ class ChatAdaptorEditModel(EditModel):
                 self.prompt_format(prompt["content"], prompt["instruction"])
             )
 
-        gens = self.model.generate(chat_prompts, **kwargs)
+        # Generate using batch_completion directly
+        response = batch_completion(
+            model=self.model_name,
+            api_base=self.api_base,
+            messages=chat_prompts,
+            **kwargs,
+        )
+
+        gens = []
+        for res in response:
+            generated_text = res.choices[0]['message']['content']
+            gens.append(generated_text)
 
         responses = []
         for prompt, gen in zip(prompts, gens):
@@ -312,9 +278,9 @@ def main(args):
     
     # Direct model instantiation based on model_type
     if args.model_type == "direct":
-        model = DirectEditModel(args.model, port=args.port)
+        model = DirectEditModel(args.model)
     elif args.model_type == "chat":
-        model = ChatAdaptorEditModel(args.model, port=args.port)
+        model = ChatAdaptorEditModel(args.model)
     else:
         raise ValueError(f"Unknown model type: {args.model_type}")
     model_kwargs = {
@@ -400,7 +366,5 @@ if __name__ == "__main__":
                         default=0.95, help="top-p sampling")
     parser.add_argument("--max-tokens", type=int,
                         default=2048, help="max new tokens to generate per completion. 2048 works for CanItEdit")
-    parser.add_argument("--port", type=int, default=8000,
-                        help="port to run the server on")
     args = parser.parse_args()
     main(args)
