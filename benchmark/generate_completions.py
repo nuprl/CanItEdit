@@ -17,7 +17,7 @@ from typing import List, Literal, Optional, TypedDict, Callable, TypeVar
 import gzip
 import json
 from litellm import text_completion, batch_completion
-
+import itertools
 
 def gunzip_json_write(path: Path, data: dict) -> None:
     with gzip.open(path, "wt") as f:
@@ -155,8 +155,30 @@ class DirectEditModel(EditModel):
         model_name,
         prompt_format: PromptFormatFunction = direct_edit_prompt,
         post_process: PostProcessFunction = lambda old, new: new,
-        stop_tokens: List[str] = ["## Code After:",
-                                  "## Instruction:", "## Code Before:", "## Test Case:", "## Explanation:"],
+        stop_tokens = [
+            # NOTE(arjun): These are the original stop tokens from the CanItEdit 
+            # code, which you can verify here:
+            #
+            # https://github.com/nuprl/CanItEdit/blob/1a87cb488e7ff801cce80550e20822228e1c88fe/benchmark/generate_completions.py#L507
+            #
+            # However, notice that in the paper and the few-shot prompt, there
+            # may not be a ":" after the stop tokens. However, if you see
+            # the training code, this is how EditCoder was trained:
+            #
+            # https://github.com/nuprl/CanItEdit/blob/1a87cb488e7ff801cce80550e20822228e1c88fe/editpackft/format.py#L20
+            #
+            # I am not going to remove these. But, I am adding new stop tokens below.
+            "## Code After:",
+            "## Instruction:",
+            "## Code Before:",
+            "## Test Case:",
+            "## Explanation:",
+            # NOTE(arjun): new stop tokens for compatibility with AgentPack
+            "# Code Before"
+            "# Code After"
+            "# Instruction"
+            "```"
+        ],
     ):
         super().__init__()
         self.model_name = model_name
@@ -292,48 +314,45 @@ def main(args):
     if not Path(args.output_dir).exists():
         Path(args.output_dir).mkdir(parents=True)
 
+    instr_kinds = ['instruction_descriptive', 'instruction_lazy']
+    items = list(itertools.product(dataset, instr_kinds))
     # writing in this format such that we can use the MultiPL-E evaluation container :)
-    for ex in tqdm(dataset, total=len(dataset)):  # type: ignore
-        assert isinstance(ex, dict)
+    for ex, instr_kind in tqdm(items):
+        path = Path(args.output_dir) / \
+            (f"{ex['full_name']}_{instr_kind}.json.gz")
+        if path.exists():
+            continue  # this pretty much resumes from where it left off
 
-        instr_kinds = ['instruction_descriptive', 'instruction_lazy']
+        instr = ex[instr_kind]
+        example = EditCommand(
+            instruction=instr,
+            content=ex["before"],
+        )
+        completions = complete_problem(
+            example,
+            model,
+            args.batch_size,
+            args.completion_limit,
+            **model_kwargs,
+        )
 
-        for instr_kind in instr_kinds:
-            path = Path(args.output_dir) / \
-                (f"{ex['full_name']}_{instr_kind}.json.gz")
-            if path.exists():
-                continue  # this pretty much resumes from where it left off
+        # copy over the example
+        result = {}
+        for k in ex:
+            result[k] = ex[k]
 
-            instr = ex[instr_kind]
-            example = EditCommand(
-                instruction=instr,
-                content=ex["before"],
-            )
-            completions = complete_problem(
-                example,
-                model,
-                args.batch_size,
-                args.completion_limit,
-                **model_kwargs,
-            )
+        result["instr_kind"] = instr_kind
+        # this is for compatibility with the MultiPL-E evaluator
+        result["prompt"] = ""
+        result["completions"] = completions
+        result["language"] = "py"
+        result["temperature"] = args.temperature
+        result["top_p"] = args.top_p
+        result["max_tokens"] = args.max_tokens
+        result["stop_tokens"] = getattr(model, "stop_tokens", [])
+        result["script_args"] = args.__dict__.copy()
 
-            # copy over the example
-            result = {}
-            for k in ex:
-                result[k] = ex[k]
-
-            result["instr_kind"] = instr_kind
-            # this is for compatibility with the MultiPL-E evaluator
-            result["prompt"] = ""
-            result["completions"] = completions
-            result["language"] = "py"
-            result["temperature"] = args.temperature
-            result["top_p"] = args.top_p
-            result["max_tokens"] = args.max_tokens
-            result["stop_tokens"] = getattr(model, "stop_tokens", [])
-            result["script_args"] = args.__dict__.copy()
-
-            gunzip_json_write(path, result)
+        gunzip_json_write(path, result)
 
 
 if __name__ == "__main__":
