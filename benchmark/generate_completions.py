@@ -369,7 +369,7 @@ if __name__ == "__main__":
         "--output-dir", type=str, required=True, help="output directory for completions"
     )
     parser.add_argument(
-        "--batch-size", type=int, default=20, help="batch size for completions"
+        "--batch-size", type=int, default=100, help="batch size for completions"
     )
     parser.add_argument(
         "--completion-limit",
@@ -384,7 +384,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=2048,
+        default=3072,
         help="max new tokens to generate per completion. 2048 works for CanItEdit",
     )
     args = parser.parse_args()
