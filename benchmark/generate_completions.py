@@ -17,8 +17,9 @@ from tqdm import tqdm
 from typing import List, Literal, Optional, TypedDict, Callable, TypeVar
 import gzip
 import json
-from litellm import text_completion, completion
+from litellm import atext_completion, acompletion
 import itertools
+import asyncio
 
 def gunzip_json_write(path: Path, data: dict) -> None:
     with gzip.open(path, "wt") as f:
@@ -128,7 +129,7 @@ class EditModel:
     def __init__(self):
         pass
 
-    def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
+    async def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
         raise NotImplementedError
 
     def get_prompt_format(self):
@@ -177,7 +178,7 @@ class DirectEditModel(EditModel):
         self.post_process = post_process
         self.stop_tokens = stop_tokens
 
-    def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
+    async def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
         assert prompt["instruction"] is not None, "Not implemented yet"
         str_prompt = self.prompt_format(
             prompt["content"], prompt["instruction"]
@@ -188,7 +189,7 @@ class DirectEditModel(EditModel):
         kwargs["stop"] = stop + self.stop_tokens
 
         # Generate using text_completion directly
-        response = text_completion(
+        response = await atext_completion(
             model=self.model_name,
             prompt=str_prompt,
             **kwargs,
@@ -226,11 +227,11 @@ class ChatAdaptorEditModel(EditModel):
         self.prompt_format = prompt_format
         self.post_process = post_process
 
-    def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
+    async def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
         assert (
             prompt["instruction"] is not None
         ), "Every command must have an instruction in ChatAdaptorEditModel"
-        response = completion(
+        response = await acompletion(
             model=self.model_name,
             messages=self.prompt_format(prompt["content"], prompt["instruction"]),
             **kwargs,
@@ -240,7 +241,7 @@ class ChatAdaptorEditModel(EditModel):
         return {"content": processed, "instruction": None}
 
 
-def main(args):
+async def main(args):
     dataset = datasets.load_dataset(
         args.dataset, args.subset, split=args.split)
     
@@ -276,7 +277,7 @@ def main(args):
         )
         completions = []
         for _ in range(args.completion_limit):
-            completion = model.generate(example, **model_kwargs)
+            completion = await model.generate(example, **model_kwargs)
             completions.append(completion)
 
         # copy over the example
@@ -329,4 +330,4 @@ if __name__ == "__main__":
     parser.add_argument("--max-tokens", type=int,
                         default=2048, help="max new tokens to generate per completion. 2048 works for CanItEdit")
     args = parser.parse_args()
-    main(args)
+    asyncio.run(main(args))
