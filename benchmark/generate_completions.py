@@ -28,16 +28,6 @@ def gunzip_json_write(path: Path, data: dict) -> None:
 T = TypeVar("T")
 
 
-def batch_prompts_from_example(example: T, batch_size: int, completion_limit: int) -> List[List[T]]:
-    prompts = [example] * completion_limit
-    num_batches = completion_limit // batch_size
-    batches = [prompts[i * batch_size: (i + 1) * batch_size]
-               for i in range(num_batches)]
-    # the last batch may be smaller
-    if len(prompts) % batch_size != 0:
-        batches.append(prompts[num_batches * batch_size:])
-
-    return batches
 
 
 Role = Literal["system", "user", "assistant"]
@@ -138,7 +128,7 @@ class EditModel:
     def __init__(self):
         pass
 
-    def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
+    def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
         raise NotImplementedError
 
     def get_prompt_format(self):
@@ -187,48 +177,35 @@ class DirectEditModel(EditModel):
         self.post_process = post_process
         self.stop_tokens = stop_tokens
 
-    def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
-        str_prompts = []
-
-        for prompt in prompts:
-            assert prompt["instruction"] is not None, "Not implemented yet"
-            str_prompts.append(
-                self.prompt_format(
-                    prompt["content"], prompt["instruction"]
-                )
-            )
+    def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
+        assert prompt["instruction"] is not None, "Not implemented yet"
+        str_prompt = self.prompt_format(
+            prompt["content"], prompt["instruction"]
+        )
 
         kwargs = kwargs.copy()
         stop = kwargs.pop("stop", [])
         kwargs["stop"] = stop + self.stop_tokens
 
         # Generate using text_completion directly
-        responses = []
-        for prompt in str_prompts:
-            response = text_completion(
-                model=self.model_name,
-                prompt=prompt,
-                **kwargs,
-            )
-            generated_text = response.choices[0].text
-            responses.append(generated_text)
+        response = text_completion(
+            model=self.model_name,
+            prompt=str_prompt,
+            **kwargs,
+        )
+        generated_text = response.choices[0].text
 
-        # Process responses
-        final_responses = []
-        for prompt, gen in zip(prompts, responses):
-            out = gen
-            try:
-                processed = self.post_process(prompt["content"], out)
-            except Exception as e:
-                # print full stack trace
-                import traceback
-                traceback.print_exc()
-                print("Error in post processing:", e)
-                processed = out
-            resp = {"content": processed, "instruction": None}
-            final_responses.append(resp)
-
-        return final_responses
+        # Process response
+        try:
+            processed = self.post_process(prompt["content"], generated_text)
+        except Exception as e:
+            # print full stack trace
+            import traceback
+            traceback.print_exc()
+            print("Error in post processing:", e)
+            processed = generated_text
+        
+        return {"content": processed, "instruction": None}
 
     def get_prompt_format(self):
         return self.prompt_format
@@ -249,38 +226,18 @@ class ChatAdaptorEditModel(EditModel):
         self.prompt_format = prompt_format
         self.post_process = post_process
 
-    def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
-        responses = [ ]
-
-        for prompt in prompts:
-            assert (
-                prompt["instruction"] is not None
-            ), "Every command must have an instruction in ChatAdaptorEditModel"
-            response = completion(
-                model=self.model_name,
-                messages=self.prompt_format(prompt["content"], prompt["instruction"]),
-                **kwargs,
-            )
-            gen = response.choices[0].message.content
-            processed = self.post_process(prompt["content"], gen)
-            resp = {"content": processed, "instruction": None}
-            responses.append(resp)
-
-        return responses
-
-
-
-
-def complete_problem(example: EditCommand, model: EditModel, batch_size: int, completion_limit: int, **kwargs) -> List[str]:
-    batches = batch_prompts_from_example(example, batch_size, completion_limit)
-
-    completions = []
-    for batch in batches: #Each batch is a list of dicts
-        resps = model.generate(batch, **kwargs)
-        for resp in resps:
-            completions.append(resp["content"])
-
-    return completions
+    def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
+        assert (
+            prompt["instruction"] is not None
+        ), "Every command must have an instruction in ChatAdaptorEditModel"
+        response = completion(
+            model=self.model_name,
+            messages=self.prompt_format(prompt["content"], prompt["instruction"]),
+            **kwargs,
+        )
+        gen = response.choices[0].message.content
+        processed = self.post_process(prompt["content"], gen)
+        return {"content": processed, "instruction": None}
 
 
 def main(args):
@@ -317,13 +274,10 @@ def main(args):
             instruction=instr,
             content=ex["before"],
         )
-        completions = complete_problem(
-            example,
-            model,
-            args.batch_size,
-            args.completion_limit,
-            **model_kwargs,
-        )
+        completions = []
+        for _ in range(args.completion_limit):
+            completion = model.generate(example, **model_kwargs)
+            completions.append(completion)
 
         # copy over the example
         result = {}
