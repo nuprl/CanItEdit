@@ -28,11 +28,7 @@ def gunzip_json_write(path: Path, data: dict) -> None:
 
 T = TypeVar("T")
 
-
-
-
 Role = Literal["system", "user", "assistant"]
-
 
 class Message(TypedDict):
     role: Role
@@ -247,7 +243,9 @@ async def process_example_and_instruction(
     model: EditModel, 
     model_kwargs: dict, 
     args, 
-    output_dir: Path
+    output_dir: Path,
+    batch_sema: asyncio.Semaphore,
+    pbar: tqdm,
 ) -> None:
     """
     Process a single example and instruction kind by generating completions and saving results.
@@ -259,20 +257,24 @@ async def process_example_and_instruction(
         model_kwargs: Additional keyword arguments for model generation
         args: Command line arguments
         output_dir: Directory to save the results
+        batch_sema: Semaphore to limit the number of concurrent tasks
     """
+    # TODO(arjun): Not real resume. :)
     path = output_dir / f"{ex['full_name']}_{instr_kind}.json.gz"
     if path.exists():
         return  # this pretty much resumes from where it left off
 
-    instr = ex[instr_kind]
-    example = EditCommand(
-        instruction=instr,
-        content=ex["before"],
-    )
-    completions = []
-    for _ in range(args.completion_limit):
-        completion = await model.generate(example, **model_kwargs)
-        completions.append(completion)
+    example = EditCommand(instruction=ex[instr_kind], content=ex["before"])
+
+    async def gen(example):
+        """
+        Issues a request, but concurrency limited by batch_sema.
+        """
+        async with batch_sema:
+            return await model.generate(example, **model_kwargs)
+
+    completion_tasks = [gen(example) for _ in range(args.completion_limit)]
+    completions = await asyncio.gather(*completion_tasks)
 
     # copy over the example
     result = {}
@@ -291,6 +293,7 @@ async def process_example_and_instruction(
     result["script_args"] = args.__dict__.copy()
 
     gunzip_json_write(path, result)
+    pbar.update(1)
 
 
 async def main(args):
@@ -316,15 +319,22 @@ async def main(args):
     instr_kinds = ['instruction_descriptive', 'instruction_lazy']
     items = list(itertools.product(dataset, instr_kinds))
 
-    for ex, instr_kind in tqdm(items):
-        await process_example_and_instruction(
-            ex,
-            instr_kind,
-            model,
-            model_kwargs,
-            args,
-            Path(args.output_dir),
-        )
+    batch_sema = asyncio.Semaphore(args.batch_size)
+
+    pbar = tqdm(total=len(items))
+
+    async with asyncio.TaskGroup() as tg:
+        for ex, instr_kind in items:
+            tg.create_task(process_example_and_instruction(
+                ex,
+                instr_kind,
+                model,
+                model_kwargs,
+                args,
+                Path(args.output_dir),
+                batch_sema=batch_sema,
+                pbar=pbar
+            ))
 
 
 if __name__ == "__main__":
