@@ -241,6 +241,58 @@ class ChatAdaptorEditModel(EditModel):
         return {"content": processed, "instruction": None}
 
 
+async def process_example_and_instruction(
+    ex: dict, 
+    instr_kind: str, 
+    model: EditModel, 
+    model_kwargs: dict, 
+    args, 
+    output_dir: Path
+) -> None:
+    """
+    Process a single example and instruction kind by generating completions and saving results.
+    
+    Args:
+        ex: The dataset example containing the code and instructions
+        instr_kind: The type of instruction to use ('instruction_descriptive' or 'instruction_lazy')
+        model: The model to use for generating completions
+        model_kwargs: Additional keyword arguments for model generation
+        args: Command line arguments
+        output_dir: Directory to save the results
+    """
+    path = output_dir / f"{ex['full_name']}_{instr_kind}.json.gz"
+    if path.exists():
+        return  # this pretty much resumes from where it left off
+
+    instr = ex[instr_kind]
+    example = EditCommand(
+        instruction=instr,
+        content=ex["before"],
+    )
+    completions = []
+    for _ in range(args.completion_limit):
+        completion = await model.generate(example, **model_kwargs)
+        completions.append(completion)
+
+    # copy over the example
+    result = {}
+    for k in ex:
+        result[k] = ex[k]
+
+    result["instr_kind"] = instr_kind
+    # this is for compatibility with the MultiPL-E evaluator
+    result["prompt"] = ""
+    result["completions"] = completions
+    result["language"] = "py"
+    result["temperature"] = args.temperature
+    result["top_p"] = args.top_p
+    result["max_tokens"] = args.max_tokens
+    result["stop_tokens"] = getattr(model, "stop_tokens", [])
+    result["script_args"] = args.__dict__.copy()
+
+    gunzip_json_write(path, result)
+
+
 async def main(args):
     dataset = datasets.load_dataset(
         args.dataset, args.subset, split=args.split)
@@ -263,40 +315,16 @@ async def main(args):
 
     instr_kinds = ['instruction_descriptive', 'instruction_lazy']
     items = list(itertools.product(dataset, instr_kinds))
-    # writing in this format such that we can use the MultiPL-E evaluation container :)
+
     for ex, instr_kind in tqdm(items):
-        path = Path(args.output_dir) / \
-            (f"{ex['full_name']}_{instr_kind}.json.gz")
-        if path.exists():
-            continue  # this pretty much resumes from where it left off
-
-        instr = ex[instr_kind]
-        example = EditCommand(
-            instruction=instr,
-            content=ex["before"],
+        await process_example_and_instruction(
+            ex,
+            instr_kind,
+            model,
+            model_kwargs,
+            args,
+            Path(args.output_dir),
         )
-        completions = []
-        for _ in range(args.completion_limit):
-            completion = await model.generate(example, **model_kwargs)
-            completions.append(completion)
-
-        # copy over the example
-        result = {}
-        for k in ex:
-            result[k] = ex[k]
-
-        result["instr_kind"] = instr_kind
-        # this is for compatibility with the MultiPL-E evaluator
-        result["prompt"] = ""
-        result["completions"] = completions
-        result["language"] = "py"
-        result["temperature"] = args.temperature
-        result["top_p"] = args.top_p
-        result["max_tokens"] = args.max_tokens
-        result["stop_tokens"] = getattr(model, "stop_tokens", [])
-        result["script_args"] = args.__dict__.copy()
-
-        gunzip_json_write(path, result)
 
 
 if __name__ == "__main__":
