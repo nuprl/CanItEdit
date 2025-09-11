@@ -4,6 +4,7 @@
 # dependencies = [
 #     "litellm",
 #     "tqdm",
+#     "datasets==4.0.*",
 # ]
 # ///
 """
