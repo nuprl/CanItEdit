@@ -195,16 +195,14 @@ class DirectEditModel(EditModel):
 
         # Process response
         try:
-            processed = self.post_process(prompt["content"], generated_text)
+            return self.post_process(prompt["content"], generated_text)
         except Exception as e:
             # print full stack trace
             import traceback
 
             traceback.print_exc()
             print("Error in post processing:", e)
-            processed = generated_text
-
-        return {"content": processed, "instruction": None}
+            return generated_text
 
     def get_prompt_format(self):
         return self.prompt_format
@@ -237,8 +235,7 @@ class ChatAdaptorEditModel(EditModel):
             **kwargs,
         )
         gen = response.choices[0].message.content
-        processed = self.post_process(prompt["content"], gen)
-        return {"content": processed, "instruction": None}
+        return self.post_process(prompt["content"], gen)
 
 
 async def process_example_and_instruction(
