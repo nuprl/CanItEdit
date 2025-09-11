@@ -17,7 +17,7 @@ from tqdm import tqdm
 from typing import List, Literal, Optional, TypedDict, Callable, TypeVar
 import gzip
 import json
-from litellm import text_completion, batch_completion
+from litellm import text_completion, completion
 import itertools
 
 def gunzip_json_write(path: Path, data: dict) -> None:
@@ -250,30 +250,18 @@ class ChatAdaptorEditModel(EditModel):
         self.post_process = post_process
 
     def generate(self, prompts: List[EditCommand], **kwargs) -> List[EditResponse]:
-        chat_prompts = []
+        responses = [ ]
+
         for prompt in prompts:
             assert (
                 prompt["instruction"] is not None
             ), "Every command must have an instruction in ChatAdaptorEditModel"
-            chat_prompts.append(
-                self.prompt_format(prompt["content"], prompt["instruction"])
+            response = completion(
+                model=self.model_name,
+                messages=self.prompt_format(prompt["content"], prompt["instruction"]),
+                **kwargs,
             )
-
-        # Generate using batch_completion directly
-        response = batch_completion(
-            model=self.model_name,
-            api_base=self.api_base,
-            messages=chat_prompts,
-            **kwargs,
-        )
-
-        gens = []
-        for res in response:
-            generated_text = res.choices[0]['message']['content']
-            gens.append(generated_text)
-
-        responses = []
-        for prompt, gen in zip(prompts, gens):
+            gen = response.choices[0].message.content
             processed = self.post_process(prompt["content"], gen)
             resp = {"content": processed, "instruction": None}
             responses.append(resp)
