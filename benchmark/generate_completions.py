@@ -11,6 +11,7 @@
 This script evaluates models on the CanItEdit dataset using vLLM for hosting
 and LiteLLM as the client for inference.
 """
+
 import datasets
 from pathlib import Path
 from tqdm import tqdm
@@ -21,6 +22,7 @@ from litellm import atext_completion, acompletion
 import itertools
 import asyncio
 
+
 def gunzip_json_write(path: Path, data: dict) -> None:
     with gzip.open(path, "wt") as f:
         json.dump(data, f)
@@ -29,6 +31,7 @@ def gunzip_json_write(path: Path, data: dict) -> None:
 T = TypeVar("T")
 
 Role = Literal["system", "user", "assistant"]
+
 
 class Message(TypedDict):
     role: Role
@@ -39,12 +42,13 @@ class Message(TypedDict):
     #  prefix_after: NotRequired[str]
 
 
-#this is one edit request
+# this is one edit request
 class EditCommand(TypedDict):
     instruction: Optional[str]
     content: str
 
-#this is model's output
+
+# this is model's output
 class EditResponse(TypedDict):
     instruction: Optional[str]
     content: str
@@ -58,6 +62,7 @@ MessagesFormatFunction = Callable[[str, str], List[Message]]
 
 # (old, new) -> response
 PostProcessFunction = Callable[[str, str], str]
+
 
 def direct_edit_prompt(
     old,
@@ -80,6 +85,7 @@ def direct_edit_prompt(
     after = f"""## Code After:\n"""
     return before + instr + after
 
+
 def chat_edit_prompt_zeroshot(old: str, instr: str) -> List[Message]:
     return [
         {
@@ -99,9 +105,10 @@ You are PythonEditGPT. You will be provided the original code snippet and an ins
 ## Instruction
 {instr}
 
-## Code After""".strip()
-            },
-        ]
+## Code After""".strip(),
+        },
+    ]
+
 
 def python_markdown_codeblock_extract(_: str, new: str) -> str:
     # print("prior to extracting codeblock:", new)
@@ -118,7 +125,6 @@ def python_markdown_codeblock_extract(_: str, new: str) -> str:
             buf += ln + "\n"
     # print("after extracting codeblock:", buf)
     return buf
-
 
 
 class EditModel:
@@ -143,8 +149,8 @@ class DirectEditModel(EditModel):
         model_name,
         prompt_format: PromptFormatFunction = direct_edit_prompt,
         post_process: PostProcessFunction = lambda old, new: new,
-        stop_tokens = [
-            # NOTE(arjun): These are the original stop tokens from the CanItEdit 
+        stop_tokens=[
+            # NOTE(arjun): These are the original stop tokens from the CanItEdit
             # code, which you can verify here:
             #
             # https://github.com/nuprl/CanItEdit/blob/1a87cb488e7ff801cce80550e20822228e1c88fe/benchmark/generate_completions.py#L507
@@ -162,10 +168,7 @@ class DirectEditModel(EditModel):
             "## Test Case:",
             "## Explanation:",
             # NOTE(arjun): new stop tokens for compatibility with AgentPack
-            "# Code Before"
-            "# Code After"
-            "# Instruction"
-            "```"
+            "# Code Before# Code After# Instruction```",
         ],
     ):
         super().__init__()
@@ -176,9 +179,7 @@ class DirectEditModel(EditModel):
 
     async def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
         assert prompt["instruction"] is not None, "Not implemented yet"
-        str_prompt = self.prompt_format(
-            prompt["content"], prompt["instruction"]
-        )
+        str_prompt = self.prompt_format(prompt["content"], prompt["instruction"])
 
         kwargs = kwargs.copy()
         stop = kwargs.pop("stop", [])
@@ -198,20 +199,23 @@ class DirectEditModel(EditModel):
         except Exception as e:
             # print full stack trace
             import traceback
+
             traceback.print_exc()
             print("Error in post processing:", e)
             processed = generated_text
-        
+
         return {"content": processed, "instruction": None}
 
     def get_prompt_format(self):
         return self.prompt_format
+
 
 class ChatAdaptorEditModel(EditModel):
     """
     This is an adaptor class to use ChatModels as EditModels.
     NOTE: This model class is only intended for inference, not training.
     """
+
     def __init__(
         self,
         model_name,
@@ -224,9 +228,9 @@ class ChatAdaptorEditModel(EditModel):
         self.post_process = post_process
 
     async def generate(self, prompt: EditCommand, **kwargs) -> EditResponse:
-        assert (
-            prompt["instruction"] is not None
-        ), "Every command must have an instruction in ChatAdaptorEditModel"
+        assert prompt["instruction"] is not None, (
+            "Every command must have an instruction in ChatAdaptorEditModel"
+        )
         response = await acompletion(
             model=self.model_name,
             messages=self.prompt_format(prompt["content"], prompt["instruction"]),
@@ -238,18 +242,18 @@ class ChatAdaptorEditModel(EditModel):
 
 
 async def process_example_and_instruction(
-    ex: dict, 
-    instr_kind: str, 
-    model: EditModel, 
-    model_kwargs: dict, 
-    args, 
+    ex: dict,
+    instr_kind: str,
+    model: EditModel,
+    model_kwargs: dict,
+    args,
     output_dir: Path,
     batch_sema: asyncio.Semaphore,
     pbar: tqdm,
 ) -> None:
     """
     Process a single example and instruction kind by generating completions and saving results.
-    
+
     Args:
         ex: The dataset example containing the code and instructions
         instr_kind: The type of instruction to use ('instruction_descriptive' or 'instruction_lazy')
@@ -297,9 +301,8 @@ async def process_example_and_instruction(
 
 
 async def main(args):
-    dataset = datasets.load_dataset(
-        args.dataset, args.subset, split=args.split)
-    
+    dataset = datasets.load_dataset(args.dataset, args.subset, split=args.split)
+
     # Direct model instantiation based on model_type
     if args.model_type == "direct":
         model = DirectEditModel(args.model)
@@ -316,7 +319,7 @@ async def main(args):
     if not Path(args.output_dir).exists():
         Path(args.output_dir).mkdir(parents=True)
 
-    instr_kinds = ['instruction_descriptive', 'instruction_lazy']
+    instr_kinds = ["instruction_descriptive", "instruction_lazy"]
     items = list(itertools.product(dataset, instr_kinds))
 
     batch_sema = asyncio.Semaphore(args.batch_size)
@@ -325,47 +328,64 @@ async def main(args):
 
     async with asyncio.TaskGroup() as tg:
         for ex, instr_kind in items:
-            tg.create_task(process_example_and_instruction(
-                ex,
-                instr_kind,
-                model,
-                model_kwargs,
-                args,
-                Path(args.output_dir),
-                batch_sema=batch_sema,
-                pbar=pbar
-            ))
+            tg.create_task(
+                process_example_and_instruction(
+                    ex,
+                    instr_kind,
+                    model,
+                    model_kwargs,
+                    args,
+                    Path(args.output_dir),
+                    batch_sema=batch_sema,
+                    pbar=pbar,
+                )
+            )
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str,
-                        default="nuprl/CanItEdit", help="dataset to use")
-    parser.add_argument("--split", type=str, default="test",
-                        help="split of the dataset to use")
-    parser.add_argument("--subset", type=str, default=None,
-                        help="subset of the split to use")
+    parser.add_argument(
+        "--dataset", type=str, default="nuprl/CanItEdit", help="dataset to use"
+    )
+    parser.add_argument(
+        "--split", type=str, default="test", help="split of the dataset to use"
+    )
+    parser.add_argument(
+        "--subset", type=str, default=None, help="subset of the split to use"
+    )
     parser.add_argument(
         "--model-type",
         type=str,
         default="direct",
-        choices=["direct","chat", "chat_oneshot"],
+        choices=["direct", "chat", "chat_oneshot"],
         help="type of model to use for completions",
     )
-    parser.add_argument("--model", type=str, required=True,
-                        help="path to model or hub name")
-    parser.add_argument("--output-dir", type=str, required=True,
-                        help="output directory for completions")
-    parser.add_argument("--batch-size", type=int, default=20,
-                        help="batch size for completions")
-    parser.add_argument("--completion-limit", type=int,
-                        default=20, help="number of completions per prompt")
-    parser.add_argument("--temperature", type=float,
-                        default=0.2, help="sampling temperature")
-    parser.add_argument("--top-p", type=float,
-                        default=0.95, help="top-p sampling")
-    parser.add_argument("--max-tokens", type=int,
-                        default=2048, help="max new tokens to generate per completion. 2048 works for CanItEdit")
+    parser.add_argument(
+        "--model", type=str, required=True, help="path to model or hub name"
+    )
+    parser.add_argument(
+        "--output-dir", type=str, required=True, help="output directory for completions"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=20, help="batch size for completions"
+    )
+    parser.add_argument(
+        "--completion-limit",
+        type=int,
+        default=20,
+        help="number of completions per prompt",
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.2, help="sampling temperature"
+    )
+    parser.add_argument("--top-p", type=float, default=0.95, help="top-p sampling")
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=2048,
+        help="max new tokens to generate per completion. 2048 works for CanItEdit",
+    )
     args = parser.parse_args()
     asyncio.run(main(args))
