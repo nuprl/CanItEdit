@@ -158,7 +158,7 @@ def main():
             pass_1 = np.round(np.mean([r["pass@1"]
                               for r in results]) * 100, 6)
             print(
-                f"{name},1,{pass_1},{num_problems},{min_completions},{max_completions},{excess_code},{excess_code_se},{mean_median_coverage}")
+                f"{name},1,{pass_1:.1f},{num_problems},{min_completions},{max_completions},{excess_code:.2f},{excess_code_se:.2f},{mean_median_coverage:.2f}")
 
         if args.k is not None:
             pass_k = np.round(np.mean([estimator(r["n"], r["c"], args.k)
